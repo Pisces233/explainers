@@ -1,0 +1,860 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ramulus 架构全景</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" media="print" onload="this.media='all'">
+<style>
+/* Layout: one reading column of eight analysis dimensions, each a heading + one figure + short findings; wide figures scroll inside their own frame. */
+:root {
+  --bg: #f4f6f4;
+  --surface: #ffffff;
+  --ink: #14191a;
+  --ink-2: #3a4442;
+  --muted: #5c6764;
+  --line: #d9dfdc;
+  --accent: #1d6b52;
+  --on-accent: #ffffff;
+  --open: #b0701a;
+  --good: #23784f;
+  --warn: #a8640f;
+  --risk: #b13a2c;
+  --c-client: #2f5bd3;
+  --c-ui: #8a4bc4;
+  --c-host: #c8501e;
+  --c-exec: #0f7f8c;
+  --c-libs: #8f7313;
+  --font-display: "IBM Plex Sans Condensed", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1312; --surface: #171c1b; --ink: #e5eae8; --ink-2: #c3ccc9; --muted: #93a09c; --line: #2a3331;
+    --accent: #5cc49d; --on-accent: #0b1411; --open: #e2a64e; --good: #5cc49d; --warn: #e2a64e; --risk: #ef7d6d;
+    --c-client: #7fa0f2; --c-ui: #b994ea; --c-host: #f0905f; --c-exec: #4cc3cf; --c-libs: #d6b657;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1312; --surface: #171c1b; --ink: #e5eae8; --ink-2: #c3ccc9; --muted: #93a09c; --line: #2a3331;
+  --accent: #5cc49d; --on-accent: #0b1411; --open: #e2a64e; --good: #5cc49d; --warn: #e2a64e; --risk: #ef7d6d;
+  --c-client: #7fa0f2; --c-ui: #b994ea; --c-host: #f0905f; --c-exec: #4cc3cf; --c-libs: #d6b657;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.65 var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 56px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; letter-spacing: 0.005em; }
+h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.1; font-weight: 700; }
+h2 { font-size: 24px; line-height: 1.25; font-weight: 600; }
+h3 { font-size: 16px; font-weight: 600; }
+p { margin: 0; max-width: 68ch; }
+code, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+a { color: var(--accent); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Header */
+header.top { padding-top: 40px; display: grid; gap: 18px; }
+.eyebrow { font: 500 12px/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.lede { color: var(--ink-2); font-size: 16.5px; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.fact { background: var(--surface); padding: 14px 16px; display: grid; gap: 2px; min-width: 0; }
+.fact b { font: 600 24px/1.2 var(--font-display); font-variant-numeric: tabular-nums; }
+.fact span { color: var(--muted); font-size: 13px; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 8px; }
+nav.toc a { text-decoration: none; color: var(--ink-2); font-size: 13px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+nav.toc a:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Sections */
+section.dim { display: grid; gap: 18px; scroll-margin-top: 16px; }
+.dim-head { display: grid; gap: 6px; }
+.dim-head .eyebrow { color: var(--accent); }
+.figure { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; min-width: 0; }
+.scroll { overflow-x: auto; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--ink-2); margin-bottom: 12px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.finding { display: grid; gap: 6px; align-content: start; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); min-width: 0; }
+.finding p { font-size: 14px; color: var(--ink-2); }
+.chip { justify-self: start; font: 500 11px/1 var(--font-mono); letter-spacing: 0.06em; padding: 5px 8px; border-radius: 999px; border: 1px solid currentColor; }
+.chip.good { color: var(--good); } .chip.warn { color: var(--warn); } .chip.risk { color: var(--risk); } .chip.info { color: var(--muted); }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 820px) { .two { grid-template-columns: minmax(0, 1fr); } }
+.note { font-size: 13px; color: var(--muted); }
+
+/* SVG diagrams */
+svg { display: block; font-family: var(--font-body); }
+svg text { fill: var(--ink); }
+svg .sub { fill: var(--muted); font-size: 11.5px; }
+svg .ttl { font-size: 13.5px; font-weight: 600; }
+svg .mono { font-family: var(--font-mono); font-size: 11px; }
+ svg .mono .sub { font-family: var(--font-body); font-size: 11.5px; }
+svg .band { fill: color-mix(in srgb, var(--bg) 70%, var(--surface)); stroke: var(--line); }
+svg .band-label { fill: var(--muted); font: 500 10.5px var(--font-mono); letter-spacing: 0.08em; }
+svg .node rect { fill: color-mix(in srgb, var(--g) 11%, var(--surface)); stroke: var(--g); stroke-width: 1.4; }
+svg .node.dash rect { stroke-dasharray: 5 4; }
+svg .edge { stroke: var(--muted); stroke-width: 1.4; fill: none; }
+svg .edge.strong { stroke: var(--ink-2); stroke-width: 2; }
+svg .edge.dash { stroke-dasharray: 5 4; }
+svg .edge-label { fill: var(--ink-2); font-size: 11.5px; }
+svg .card-bg { fill: var(--surface); }
+svg .arrowhead { fill: var(--muted); }
+svg .arrowhead.strong { fill: var(--ink-2); }
+.g-client { --g: var(--c-client); } .g-ui { --g: var(--c-ui); } .g-host { --g: var(--c-host); } .g-exec { --g: var(--c-exec); } .g-libs { --g: var(--c-libs); } .g-store { --g: var(--muted); }
+
+/* Bars */
+.bars { display: grid; gap: 4px; font-variant-numeric: tabular-nums; }
+.bar-row { display: grid; grid-template-columns: minmax(118px, 168px) minmax(0, 1fr) 64px 64px 46px; gap: 10px; align-items: center; font-size: 13px; padding: 3px 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); }
+.bar-row.head { color: var(--muted); font-size: 12px; border-bottom-color: var(--line); }
+.bar-row .name { display: flex; align-items: center; gap: 7px; min-width: 0; font-family: var(--font-mono); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--g); }
+.track { display: grid; gap: 2px; }
+.track i { display: block; height: 7px; border-radius: 0 4px 4px 0; min-width: 2px; }
+.track i.src { background: var(--ink-2); }
+.track i.test { background: var(--accent); }
+.num { text-align: right; font-family: var(--font-mono); font-size: 12px; }
+.ratio.low { color: var(--warn); font-weight: 500; }
+@media (max-width: 560px) {
+  .bar-row { grid-template-columns: minmax(92px, 120px) minmax(0, 1fr) 54px 54px; }
+  .bar-row > :nth-child(5) { display: none; }
+}
+.hbar { display: grid; grid-template-columns: minmax(110px, 150px) minmax(0, 1fr) 62px; gap: 10px; align-items: center; font-size: 13px; padding: 3px 0; }
+.hbar .name { font-family: var(--font-mono); font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hbar .fill { height: 9px; border-radius: 0 4px 4px 0; background: var(--c-host); }
+.stack { display: flex; height: 10px; gap: 2px; }
+.stack i { display: block; height: 100%; }
+.stack i.done { background: var(--accent); border-radius: 0; }
+.stack i.open { background: var(--open); border-radius: 0 4px 4px 0; }
+.spec-row { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr) 76px; gap: 10px; align-items: center; font-size: 12px; padding: 3px 0; }
+.spec-row .name { font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+@media (max-width: 640px) { .spec-row { grid-template-columns: minmax(0, 1fr) 72px; } .spec-row .stack { grid-column: 1 / -1; grid-row: 2; } }
+
+table.plain { border-collapse: collapse; width: 100%; font-size: 13px; }
+table.plain th, table.plain td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.plain th { font-weight: 500; color: var(--muted); font-size: 12px; }
+table.plain td.n { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.plain td code { word-break: break-all; }
+
+ol.path { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; counter-reset: step; }
+ol.path li { counter-increment: step; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+ol.path li:last-child { border-bottom: 0; }
+ol.path li::before { content: counter(step); font: 600 15px/32px var(--font-display); text-align: center; width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid var(--accent); color: var(--accent); }
+ol.path .who { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+ol.path .who span { font: 500 11px/1 var(--font-mono); padding: 4px 7px; border-radius: 5px; background: color-mix(in srgb, var(--g) 14%, var(--surface)); color: var(--ink); border: 1px solid color-mix(in srgb, var(--g) 50%, transparent); }
+ol.path p { font-size: 14px; color: var(--ink-2); }
+
+/* entity diagram */
+svg .ent-box { fill: var(--surface); stroke: var(--g); stroke-width: 1.4; }
+svg .ent-head { fill: color-mix(in srgb, var(--g) 16%, var(--surface)); }
+svg .ent-title { font-size: 13px; font-weight: 600; }
+svg .ent-field { font: 11px var(--font-mono); fill: var(--ink-2); }
+svg .ent-field.key { fill: var(--accent); font-weight: 500; }
+svg .card-label { fill: var(--ink-2); font: 500 11px var(--font-mono); }
+svg .plate { fill: var(--surface); }
+/* capability matrix */
+table.cap { border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; width: 100%; min-width: 760px; }
+table.cap th { font-weight: 500; color: var(--muted); padding: 6px 4px; text-align: center; white-space: nowrap; }
+table.cap th:first-child { text-align: left; }
+table.cap td { text-align: center; padding: 0; border: 2px solid var(--surface); height: 24px; font-family: var(--font-mono); min-width: 52px; }
+table.cap td.pk { text-align: left; white-space: nowrap; padding-right: 10px; }
+table.cap td.pk span { display: inline-flex; align-items: center; gap: 7px; }
+table.cap td.z { color: var(--line); }
+tr.grp td { font: 500 11px var(--font-mono); color: var(--muted); text-align: left; padding-top: 10px; letter-spacing: .04em; height: auto; }
+.tag { font: 500 11px var(--font-mono); white-space: nowrap; color: var(--ink-2); }
+.dash { color: var(--muted); }
+table.plain td.cap-text { min-width: 240px; }
+table.feat td:first-child { white-space: nowrap; font-weight: 500; }
+.states { display: grid; gap: 12px; }
+.state-row { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; align-items: center; font-size: 13px; }
+.state-row b { font-family: var(--font-display); font-weight: 600; }
+.chain { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+.chain span { font: 500 11.5px var(--font-mono); padding: 3px 7px; border-radius: 5px; border: 1px solid var(--line); background: var(--bg); }
+.chain em { font-style: normal; color: var(--muted); }
+
+#tip { position: fixed; z-index: 20; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 12.5px; padding: 6px 9px; border-radius: 6px; max-width: 280px; }
+#matrix rect.cell { cursor: default; }
+#matrix rect.cell:hover { stroke: var(--ink); stroke-width: 1.5; }
+footer { color: var(--muted); font-size: 13px; display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 20px; }
+@media (prefers-reduced-motion: no-preference) { nav.toc a { transition: border-color .15s, color .15s; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="eyebrow">Ramulus · 源码快照 8b7601ff7 · 2026-11-07</div>
+  <h1>Ramulus 架构全景</h1>
+  <p class="lede">这份图谱主要从代码提取：SQL 表结构、类型定义、导入关系、路由注册和命令目录。覆盖分层、职责划分、实体关系、领域关系、功能点、执行模型、持久化、依赖、规模和风险十个维度。数字来自当前工作树（含 113 个未提交修改）。</p>
+  <div class="facts">
+    <div class="fact"><b>26</b><span>工作区包（5 个应用 · 21 个库）</span></div>
+    <div class="fact"><b>114 万</b><span>非测试源码行</span></div>
+    <div class="fact"><b>143 万</b><span>测试代码行，测试/源码 1.26</span></div>
+    <div class="fact"><b>12</b><span>执行器（内置 1 · 外部 11）</span></div>
+    <div class="fact"><b>304+</b><span>Host HTTP 路由注册点</span></div>
+    <div class="fact"><b>135</b><span>Doc / Entry 类型标识</span></div>
+  </div>
+  <nav class="toc" aria-label="维度">
+    <a href="#layers">分层</a><a href="#roles">职责划分</a><a href="#er">实体关系</a><a href="#context">领域关系</a><a href="#features">功能点</a><a href="#exec">执行模型</a><a href="#store">持久化</a><a href="#deps">包依赖</a><a href="#size">规模</a><a href="#risks">风险与建议</a>
+  </nav>
+</header>
+
+<!-- 1. Layers -->
+<section class="dim" id="layers">
+  <div class="dim-head">
+    <div class="eyebrow">1 · 分层</div>
+    <h2>分层与运行时路径</h2>
+    <p>请求从三个客户端进入同一个 SDK，经认证的 HTTP/SSE 到达唯一的 Host。Host 持有权限和事务，Engine 选择内置执行器或外部 Agent 适配器。内置执行器的原生记录最终落在 Workspace 的 <code>runtime.sqlite</code>，外部执行器保留自己的会话存储。</p>
+  </div>
+  <div class="figure">
+    <div class="legend">
+      <span><i style="background:var(--c-client)"></i>客户端应用</span>
+      <span><i style="background:var(--c-ui)"></i>共享 UI / SDK</span>
+      <span><i style="background:var(--c-host)"></i>Host</span>
+      <span><i style="background:var(--c-exec)"></i>执行层</span>
+      <span><i style="background:var(--c-libs)"></i>领域契约与能力库</span>
+    </div>
+    <div class="scroll">
+      <svg viewBox="0 0 1040 690" style="min-width:880px;width:100%" role="img" aria-labelledby="layers-title">
+        <title id="layers-title">Ramulus 分层架构：客户端、共享 UI 与 SDK、Host、执行层、Pi 基础、持久化，右侧为 Core 与能力库</title>
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0,0 L10,5 L0,10 z"/></marker>
+          <marker id="ahs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead strong" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+        <!-- bands -->
+        <rect class="band" x="20" y="14" width="740" height="96" rx="10"/><text class="band-label" x="34" y="32">客户端 · 平台组合 · apps/</text>
+        <rect class="band" x="20" y="128" width="740" height="96" rx="10"/><text class="band-label" x="34" y="146">共享客户端</text>
+        <rect class="band" x="20" y="262" width="740" height="96" rx="10"/><text class="band-label" x="34" y="280">HOST · 权威、用例、事务与外部效果</text>
+        <rect class="band" x="20" y="376" width="740" height="96" rx="10"/><text class="band-label" x="34" y="394">执行</text>
+        <rect class="band" x="20" y="490" width="740" height="96" rx="10"/><text class="band-label" x="34" y="508">PI v1.4.0</text>
+        <rect class="band" x="20" y="604" width="740" height="76" rx="10"/><text class="band-label" x="34" y="622">持久化</text>
+        <rect class="band" x="772" y="14" width="252" height="666" rx="10"/><text class="band-label" x="786" y="32">领域契约与能力库</text>
+
+        <!-- row A -->
+        <g class="node g-client"><rect x="40" y="42" width="165" height="56" rx="7"/><text class="ttl" x="52" y="64">Desktop</text><text class="sub" x="52" y="83">Electron · 托管 Host</text></g>
+        <g class="node g-client"><rect x="217" y="42" width="165" height="56" rx="7"/><text class="ttl" x="229" y="64">Mobile</text><text class="sub" x="229" y="83">Capacitor iOS / Android</text></g>
+        <g class="node g-client"><rect x="394" y="42" width="160" height="56" rx="7"/><text class="ttl" x="406" y="64">CLI</text><text class="sub" x="406" y="83">人类 · Agent · MCP</text></g>
+        <g class="node g-client dash"><rect x="566" y="42" width="176" height="56" rx="7"/><text class="ttl" x="578" y="64">Relay</text><text class="sub" x="578" y="83">独立的不透明通道路由服务</text></g>
+
+        <!-- row B -->
+        <g class="node g-ui"><rect x="40" y="156" width="342" height="56" rx="7"/><text class="ttl" x="52" y="178">workbench-ui</text><text class="sub" x="52" y="197">唯一的 React DOM / Tailwind 生产界面、导航、编辑器与组件</text></g>
+        <g class="node g-ui"><rect x="394" y="156" width="348" height="56" rx="7"/><text class="ttl" x="406" y="178">Client SDK · @ramulus/client</text><text class="sub" x="406" y="197">传输 · 来源限定投影 · 原始命令回执匹配</text></g>
+        <path class="edge" d="M122 98 V154" marker-end="url(#ah)"/>
+        <path class="edge" d="M300 98 V154" marker-end="url(#ah)"/>
+        <path class="edge" d="M474 98 V154" marker-end="url(#ah)"/>
+        <path class="edge" d="M382 184 H392" />
+
+        <!-- transport -->
+        <path class="edge strong" d="M568 212 V288" marker-end="url(#ahs)"/>
+        <rect class="card-bg" x="578" y="233" width="184" height="20" rx="4"/>
+        <text class="edge-label" x="584" y="247">HTTP / SSE · 回环 / HTTPS / Relay</text>
+
+        <!-- row C -->
+        <g class="node g-host"><rect x="40" y="290" width="702" height="56" rx="7"/><text class="ttl" x="52" y="312">Host · apps/host（Hono + better-sqlite3）</text><text class="sub" x="52" y="331">认证 · Workspace 组合 · 产品用例 · 原生事务 · 外部效果 · 资源清理 · 35 个领域目录</text></g>
+
+        <!-- row D -->
+        <path class="edge" d="M205 346 V402" marker-end="url(#ah)"/>
+        <path class="edge" d="M560 346 V402" marker-end="url(#ah)"/>
+        <g class="node g-exec"><rect x="40" y="404" width="330" height="56" rx="7"/><text class="ttl" x="52" y="426">Engine · 原生执行入口</text><text class="sub" x="52" y="445">内置模型/工具执行 · 协作 · 执行器适配</text></g>
+        <g class="node g-exec"><rect x="382" y="404" width="360" height="56" rx="7"/><text class="ttl" x="394" y="426">external-agents</text><text class="sub" x="394" y="445">11 种协议：ACP · Codex · Claude · OpenCode · Copilot · Pi …</text></g>
+        <path class="edge" d="M370 432 H380" marker-end="url(#ah)"/>
+
+        <!-- row E -->
+        <path class="edge" d="M125 460 V516" marker-end="url(#ah)"/>
+        <path class="edge" d="M300 460 V516" marker-end="url(#ah)"/>
+        <path class="edge" d="M470 460 L330 516" marker-end="url(#ah)"/>
+        <g class="node g-exec"><rect x="40" y="518" width="170" height="56" rx="7"/><text class="ttl" x="52" y="540">pi-harness</text><text class="sub" x="52" y="559">会话 · 模型/工具 · 上下文</text></g>
+        <g class="node g-exec"><rect x="220" y="518" width="170" height="56" rx="7"/><text class="ttl" x="232" y="540">pi-runtime</text><text class="sub" x="232" y="559">Task/Entry · 队列 · 检查点</text></g>
+        <g class="node g-exec"><rect x="400" y="518" width="110" height="56" rx="7"/><text class="ttl" x="412" y="540">pi-chord</text><text class="sub" x="412" y="559">文档状态 · Delta</text></g>
+        <g class="node g-exec"><rect x="520" y="518" width="95" height="56" rx="7"/><text class="ttl" x="532" y="540">pi-ai</text><text class="sub" x="532" y="559">模型访问</text></g>
+        <g class="node g-exec"><rect x="625" y="518" width="117" height="56" rx="7"/><text class="ttl" x="637" y="540">env · telemetry</text><text class="sub" x="637" y="559">执行环境 · 遥测</text></g>
+        <path class="edge" d="M210 546 H218" marker-end="url(#ah)"/>
+
+        <!-- row F -->
+        <path class="edge" d="M305 574 V630" marker-end="url(#ah)"/>
+        <path class="edge dash" d="M742 432 H752 V650 H744" marker-end="url(#ah)"/>
+        <g class="node g-store"><rect x="40" y="632" width="350" height="38" rx="7"/><text class="ttl" x="52" y="656">Workspace runtime.sqlite</text><text class="sub" x="240" y="656">原生记录 · Goal · 回执</text></g>
+        <g class="node g-store"><rect x="400" y="632" width="150" height="38" rx="7"/><text class="ttl" x="412" y="656">产品 Registry</text></g>
+        <g class="node g-store dash"><rect x="560" y="632" width="182" height="38" rx="7"/><text class="ttl" x="572" y="656">外部执行器自有存储</text></g>
+
+        <!-- side: core + libs -->
+        <g class="node g-libs"><rect x="786" y="44" width="224" height="124" rx="7" style="stroke-width:2"/>
+          <text class="ttl" x="798" y="66">Core · @ramulus/core</text>
+          <text class="sub" x="798" y="86">纯契约 · 身份 · 解析 · 业务规则</text>
+          <text class="sub" x="798" y="104">201 个公开导出入口</text>
+          <text class="sub" x="798" y="128">引用它的源文件：</text>
+          <text class="sub" x="798" y="146">Host 799 · UI 720 · SDK 232</text>
+          <text class="sub" x="798" y="160">Desktop 173 · 外部适配 105</text>
+        </g>
+        <text class="band-label" x="786" y="196">能力库 · 按真实能力划分</text>
+        <g class="mono">
+          <text x="786" y="222">profile</text><text class="sub" x="786" y="237">Skill / Profile / Suite 格式与加载</text>
+          <text x="786" y="264">extensions</text><text class="sub" x="786" y="279">扩展声明 · 能力词表 · 选择</text>
+          <text x="786" y="306">mcp-client</text><text class="sub" x="786" y="321">MCP stdio 连接、发现与请求退役</text>
+          <text x="786" y="348">spec</text><text class="sub" x="786" y="363">Ramulspec 文档 · 校验 · 合并</text>
+          <text x="786" y="390">companion</text><text class="sub" x="786" y="405">Host Companion 运行时</text>
+          <text x="786" y="432">wiki</text><text class="sub" x="786" y="447">资料与检索</text>
+          <text x="786" y="474">documents</text><text class="sub" x="786" y="489">纯文档处理</text>
+          <text x="786" y="516">web-access</text><text class="sub" x="786" y="531">搜索 · 内容提取</text>
+          <text x="786" y="558">relay-transport</text><text class="sub" x="786" y="573">安全传输</text>
+          <text x="786" y="600">i18n</text><text class="sub" x="786" y="615">ICU 文案资源（多为生成的类型）</text>
+        </g>
+        <text class="sub" x="786" y="652">所有层都向内依赖 Core；</text>
+        <text class="sub" x="786" y="668">HTTP/SSE 是运行时连接，不是导入许可</text>
+      </svg>
+    </div>
+  </div>
+  <div class="findings">
+    <div class="finding"><span class="chip good">清晰</span><h3>单一权威</h3><p>打开更多客户端不会多出调度器。关闭客户端时 Host 继续运行，执行、权限和清理只在 Host 和原生运行时里发生。</p></div>
+    <div class="finding"><span class="chip good">清晰</span><h3>一套界面</h3><p>Desktop 和 Mobile 共用 workbench-ui。尺寸只决定面板落位和密度，不切换页面结构。</p></div>
+    <div class="finding"><span class="chip info">边界</span><h3>外部执行器保留原生运行时</h3><p>Codex、Claude Code、外部 Pi 的会话历史留在它们自己的存储里，Ramulus 只保存来源限定的绑定和关联。</p></div>
+  </div>
+</section>
+
+<!-- Roles -->
+<section class="dim" id="roles">
+  <div class="dim-head">
+    <div class="eyebrow">2 · 职责</div>
+    <h2>职责划分</h2>
+    <p>每个格子是该包里导入或使用这项能力的源文件数。空格说明这一层碰不到这种副作用，所以这张表能直接看出边界是否落实在代码里。</p>
+  </div>
+  <div class="figure scroll"><table class="cap" id="capmatrix"></table>
+    <p class="note" style="margin-top:10px">未列出的 extensions、mcp-client、wiki、documents、relay-transport、i18n、pi-telemetry 基本是纯逻辑，这十项能力几乎都为 0。</p>
+  </div>
+  <div class="figure scroll">
+    <h3 style="margin-bottom:6px">各层持有什么</h3>
+    <table class="plain">
+      <thead><tr><th>层</th><th>持有</th><th>代码里的依据</th></tr></thead>
+      <tbody>
+        <tr><td>Core</td><td>身份、契约、解析和纯规则</td><td>224 个文件有 191 个用 zod，0 个 SQLite；<code>DurableScope</code>、<code>durableAgentReferenceSchema</code> 都在这里</td></tr>
+        <tr><td>Client SDK</td><td>传输、响应校验、原始命令 journal、投影</td><td>0 个 SQLite 和路由；文件系统访问都在 <code>src/local/</code>，浏览器安全入口不碰</td></tr>
+        <tr><td>workbench-ui</td><td>全部界面、导航、编辑器、状态展示</td><td>React 643 个文件，Host 引用 0，Electron 和 Capacitor 引用 0</td></tr>
+        <tr><td>Desktop / Mobile</td><td>平台能力和本地私有状态</td><td>Electron 只在 Desktop（84），Capacitor 只在 Mobile（9）；Desktop 的 Host 引用都在渲染进程之外</td></tr>
+        <tr><td>Host</td><td>认证、用例、事务、外部效果、资源回收</td><td>Hono 路由全部在这里（93 个文件），SQLite 55、子进程 37、文件系统 259</td></tr>
+        <tr><td>Engine</td><td>内置执行装配、Agent 协作、工具效果</td><td><code>Harness.open</code>、<code>cooperation/delivery.ts</code>；只有 28 个文件</td></tr>
+        <tr><td>external-agents</td><td>外部执行器协议和会话</td><td>11 个协议目录，13 个文件引用模型或 Agent SDK，15 个文件起子进程</td></tr>
+        <tr><td>pi-harness</td><td>Generation / Tool / Compaction 任务和内置工具</td><td><code>pi.generation</code>、<code>pi.tool</code>、<code>pi.compaction</code>；工具有 read、write、edit、bash</td></tr>
+        <tr><td>pi-runtime</td><td>Session、调度器、记录存储</td><td><code>scheduler.ts</code> 2,928 行；原生表结构在 <code>storage/sqlite/migrations.ts</code></td></tr>
+        <tr><td>pi-ai</td><td>模型提供方访问</td><td>11 个文件引用提供方 SDK，12 个文件直接 fetch</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="findings">
+    <div class="finding"><span class="chip good">落实</span><h3>平台能力没有外溢</h3><p>Electron、Capacitor、React、Hono 各自只出现在一层，少量例外是 Desktop 的 9 个和 Mobile 的 1 个 React 组合文件。</p></div>
+    <div class="finding"><span class="chip info">例外</span><h3>Core 有 3 个文件碰文件系统</h3><p><code>workspaces.ts</code>、<code>packages.ts</code>、<code>workspace-config.ts</code> 是定义加载器。除它们之外 Core 是纯逻辑。</p></div>
+    <div class="finding"><span class="chip info">例外</span><h3>Mobile 自带 SQLite</h3><p>Mobile 有 3 个文件维护本地状态、阅读和导航观察表。这些是设备私有状态，不是执行记录。</p></div>
+  </div>
+</section>
+
+<!-- ER -->
+<section class="dim" id="er">
+  <div class="dim-head">
+    <div class="eyebrow">3 · 实体</div>
+    <h2>主要实体关系</h2>
+    <p>上半部分是 Host 级的组织数据，下半部分是每个 Workspace 自己的执行数据。两边不是同一个数据库，跨库关系（虚线）靠带作用域的引用维持，没有外键。</p>
+  </div>
+  <div class="figure scroll">
+    <div class="legend">
+      <span>实线：外键或记录字段</span><span>虚线：跨库引用</span><span>绿色字段：标识</span><span>原生记录的作用域是 {workspace_id, storage_id}</span>
+    </div>
+    <svg id="erd" viewBox="0 0 1120 776" style="min-width:980px;width:100%" role="img" aria-label="主要实体关系图：Project、Workspace、Conversation、Task、Submission、Entry 等"></svg>
+  </div>
+  <div class="figure scroll">
+    <h3 style="margin-bottom:6px">关系怎么读</h3>
+    <table class="plain">
+      <thead><tr><th>关系</th><th>基数</th><th>代码约束</th></tr></thead>
+      <tbody>
+        <tr><td>Project — Workspace</td><td class="n">1 : N</td><td><code>workspace_owners</code> 以 <code>workspace_id</code> 为主键，所以一个 Workspace 只有一个所有者</td></tr>
+        <tr><td>Project — Member</td><td class="n">N : M</td><td><code>project_memberships</code> 可带 Profile，Member 分 human 和 agent</td></tr>
+        <tr><td>ProjectTask — 原生对象</td><td class="n">0..1 : 1</td><td><code>UNIQUE(owner_workspace_id, owner_storage_id, owner_kind, owner_id)</code> 指向 Conversation 或 Task</td></tr>
+        <tr><td>Agent — Conversation</td><td class="n">同一身份</td><td>没有 Agent 表。<code>{source: "ramulus", scope, conversation_id}</code> 就是 Agent 引用</td></tr>
+        <tr><td>子 Agent — 父</td><td class="n">N : 1</td><td><code>ConversationRecord.owner</code> 记录创建它的 Conversation 和 Task，用于归属和子树中止</td></tr>
+        <tr><td>Fork — 来源</td><td class="n">N : 1</td><td><code>ConversationRecord.parent</code> 记录来源和分叉点 Entry，只继承历史，和 owner 互相独立</td></tr>
+        <tr><td>Task — 所有者</td><td class="n">N : 1</td><td><code>TaskOwnership</code> 是 Conversation 或另一个 Task；等待用 <code>failFast</code> 或 <code>allSettled</code></td></tr>
+        <tr><td>Submission — Entry</td><td class="n">N : 1..3</td><td>按状态引用 entry、answer、result</td></tr>
+        <tr><td>Entry — Task</td><td class="n">N : 0..1</td><td><code>byTaskId</code> 记录生产者；<code>edits</code> 只覆盖上下文，不改原记录</td></tr>
+        <tr><td>Document — 作用域</td><td class="n">N : 1</td><td><code>scope_kind</code> 是 session、conversation 或 task，内容按 base 和 delta 修订</td></tr>
+        <tr><td>Goal — Conversation</td><td class="n">N : 1</td><td>Goal 是 session 级文档族，<code>responsible_agent</code> 指向负责的 Agent</td></tr>
+        <tr><td>Conversation — 外部会话</td><td class="n">1 : 0..1</td><td>绑定写成 <code>ramulus.agent.external-binding</code> Entry，当前值在 Doc；历史绑定保留</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="figure scroll">
+    <h3 style="margin-bottom:6px">图外的实体</h3>
+    <table class="plain">
+      <thead><tr><th>实体</th><th>关系</th><th>位置</th></tr></thead>
+      <tbody>
+        <tr><td>Model Connection / Account</td><td>账户提供目录和配额，连接绑定请求和凭据</td><td><code>core/model-connections.ts</code>、<code>host/models</code></td></tr>
+        <tr><td>PackageRevision / Installation</td><td>来源解析到修订，修订安装到 Workspace，可回滚和导出</td><td><code>core/package-contracts.ts</code>、<code>host/methods</code></td></tr>
+        <tr><td>Library Item / Target</td><td>条目按 Agent 目标投射，每个目标有独立选择状态</td><td><code>core/library-contracts.ts</code>、<code>host/library</code></td></tr>
+        <tr><td>Companion Configuration / Peer</td><td>每个 Host 一份配置，带来源、预算、事件和对端绑定</td><td><code>host/companion/companion-store.ts</code></td></tr>
+        <tr><td>Schedule / Invocation</td><td>计划产生调用记录，调用再进入原生输入</td><td><code>core/schedule-contracts.ts</code>、<code>host/storage/peripheral-records.ts</code></td></tr>
+        <tr><td>Artifact / Version / Render / Delivery</td><td>产物 1 : N 版本，版本再有渲染和投递</td><td><code>host/artifacts/records.ts</code></td></tr>
+        <tr><td>Question / Decision / Delivery</td><td>Agent 之间的提问、决定和投递，都是 Doc</td><td><code>engine/cooperation/records.ts</code></td></tr>
+        <tr><td>Device Grant / Invitation / Enrollment</td><td>邀请注册成设备，设备持有授权和轮换记录</td><td><code>host/remote/remote-device-registry.ts</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Context -->
+<section class="dim" id="context">
+  <div class="dim-head">
+    <div class="eyebrow">4 · 领域</div>
+    <h2>领域模型关系</h2>
+    <p>Host 有 35 个领域目录。这里按职责归成 9 组，再用真实的相对导入统计它们之间的依赖。行依赖列，数字是文件级导入数（含类型导入）。</p>
+  </div>
+  <div class="figure scroll">
+    <h3 style="margin-bottom:6px">领域组与职责</h3>
+    <table class="plain">
+      <thead><tr><th>领域组</th><th>负责</th><th>目录</th><th style="text-align:right">行</th></tr></thead>
+      <tbody>
+        <tr><td>组织</td><td>Project、Workspace、成员、工作树、Workspace 运行时获取</td><td class="tag">organization</td><td class="n">16,162</td></tr>
+        <tr><td>会话执行</td><td>Conversation 用例、Agent 协作、Goal、历史导入、工具审批</td><td class="tag">conversations cooperation goals history tool-approvals</td><td class="n">45,918</td></tr>
+        <tr><td>Agent 与模型</td><td>外部执行器连接、账户、模型目录、配额、路由</td><td class="tag">external-agents models</td><td class="n">79,536</td></tr>
+        <tr><td>能力</td><td>Library、方法包、扩展、插件、MCP、Evolution</td><td class="tag">library methods extensions plugins mcp evolution help</td><td class="n">49,035</td></tr>
+        <tr><td>工作材料</td><td>文件、Git、GitHub、Spec、Wiki、Artifact</td><td class="tag">workspace-files workspace-git github spec wiki artifacts</td><td class="n">44,020</td></tr>
+        <tr><td>运行环境</td><td>浏览器、Computer 控制、终端、脚本、听写</td><td class="tag">browser computer terminals scripts dictation</td><td class="n">18,747</td></tr>
+        <tr><td>自动化</td><td>Companion、定时任务</td><td class="tag">companion schedules</td><td class="n">29,806</td></tr>
+        <tr><td>连接与服务</td><td>远程设备、推送、服务生命周期、诊断、私有状态、存储</td><td class="tag">remote notifications runtime diagnostics client-state storage</td><td class="n">38,476</td></tr>
+        <tr><td>组合根</td><td>装配 HTTP、Workspace 资源和生命周期</td><td class="tag">composition</td><td class="n">15,650</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="two">
+    <div class="figure scroll"><h3 style="margin-bottom:10px">领域组之间的依赖</h3><svg id="gmatrix" role="img" aria-label="Host 领域组依赖矩阵"></svg></div>
+    <div class="figure"><h3 style="margin-bottom:10px">最强的目录级依赖</h3><div id="hotedges"></div>
+      <p class="note" style="margin-top:12px">被依赖最多的目录：organization 30、storage 23、conversations 23、workspace-files 20、remote 19。依赖别人最多的目录：composition 34、organization 31、conversations 25。</p>
+    </div>
+  </div>
+  <div class="findings">
+    <div class="finding"><span class="chip risk">风险</span><h3>Host 内部目录成环</h3><p>去掉纯类型导入后，35 个目录里仍有 34 个在同一个强连通分量里，只有 <code>storage</code> 在环外。共 279 条值依赖，73 对互相依赖。包之间的层次没有延伸到 Host 内部。</p></div>
+    <div class="finding"><span class="chip warn">关注</span><h3>组合根被反向依赖</h3><p>13 个目录依赖 <code>composition</code>，其中 conversations 和 companion 各有 13 个文件。组合根通常应该只向外依赖。</p></div>
+    <div class="finding"><span class="chip warn">关注</span><h3>Companion 是最重的依赖方</h3><p>自动化组对会话执行和连接服务各有 71 处依赖。Companion 在 Host 有 2.7 万行，<code>packages/companion</code> 只有 747 行。</p></div>
+  </div>
+</section>
+
+<!-- Features -->
+<section class="dim" id="features">
+  <div class="dim-head">
+    <div class="eyebrow">5 · 功能</div>
+    <h2>主要功能点</h2>
+    <p>能力从路由、命令和契约里归纳。“—”表示这一列没有专属目录或路由，功能可能挂在别处，比如 Library 的路由在 methods 下，Git 界面在 organization 和 inspection 里。</p>
+  </div>
+  <div class="figure scroll">
+    <table class="plain feat">
+      <thead><tr><th>功能域</th><th>主要能力</th><th style="text-align:right">Core 文件</th><th style="text-align:right">Host 行</th><th style="text-align:right">路由</th><th style="text-align:right">专属 UI 行</th><th>CLI</th><th>Mobile</th></tr></thead>
+      <tbody id="feattable"></tbody>
+    </table>
+    <p class="note" style="margin-top:10px">CLI 有 41 个命令族。Agent 内置工具是 read、write、edit、bash，协作工具的动作是 spawn、fork、send、inspect、ask、reply。外部执行器是 pi、claude-code、codex、opencode、copilot、antigravity、cline、deepseek-harness、devin、amp 和通用 acp。</p>
+  </div>
+</section>
+
+<!-- Exec -->
+<section class="dim" id="exec">
+  <div class="dim-head">
+    <div class="eyebrow">6 · 运行时</div>
+    <h2>执行模型</h2>
+    <p>沿代码追踪一条用户消息。内置和外部执行器在 Submission 之后分流，但都写同一套 Task 和 Entry。</p>
+  </div>
+  <div class="figure">
+    <ol class="path">
+      <li><div><div class="who"><span class="g-ui">client · durable.ts</span></div><p>SDK 校验后调用 <code>POST …/conversations/:id/input</code>，同时在 journal 留下原始命令。</p></div></li>
+      <li><div><div class="who"><span class="g-host">host · durable-workspace-routes.ts</span></div><p>路由解析 <code>durableConversationCommandSchema</code>，取得 actor，核对地址和引用，并绑定请求生命周期。</p></div></li>
+      <li><div><div class="who"><span class="g-exec">pi-runtime · submissions.ts</span></div><p><code>submissions.submit</code> 写入 Submission，状态从 <code>queued</code> 开始。</p></div></li>
+      <li><div><div class="who"><span class="g-exec">pi-harness · inbox / generation</span><span class="g-client">external-agents · durable/input</span></div><p>内置路径进入 <code>pi.inbox</code> Doc，由 <code>pi.generation</code> 调模型。绑定外部会话时走 <code>ramulus.agent.external-input</code>。</p></div></li>
+      <li><div><div class="who"><span class="g-exec">pi-harness · tool.ts</span></div><p>模型的每个工具调用创建一个 <code>pi.tool</code> 子 Task，一轮结束后 <code>finishToolRound</code> 决定下一次生成。</p></div></li>
+      <li><div><div class="who"><span class="g-exec">pi-runtime · Entry</span><span class="g-ui">client · 活动流</span></div><p>产出写成带 <code>byTaskId</code> 的 Entry，Submission 结算。客户端通过 <code>…/activity/watch</code> 看到变化。</p></div></li>
+    </ol>
+  </div>
+  <div class="two">
+    <div class="figure states">
+      <h3>状态机</h3>
+      <div class="state-row"><b>Task</b><div class="chain"><span>pending</span><em>→</em><span>running</span><em>⇄</em><span>waiting</span><span>sleeping</span><em>→</em><span>completing</span><em>→</em><span>terminal</span></div></div>
+      <div class="state-row"><b>Submission</b><div class="chain"><span>queued</span><em>→</em><span>placed</span><em>→</em><span>done</span><span>handled</span><span>unanswered</span></div></div>
+      <div class="state-row"><b>Goal</b><div class="chain"><span>active</span><em>⇄</em><span>paused</span><em>→</em><span>completed</span><span>cleared</span></div></div>
+    </div>
+    <div class="figure scroll">
+      <h3 style="margin-bottom:6px">主要 Task 定义</h3>
+      <table class="plain">
+        <tbody>
+          <tr><td><code>pi.generation</code></td><td>模型调用和工具轮次</td></tr>
+          <tr><td><code>pi.tool</code></td><td>单次工具调用</td></tr>
+          <tr><td><code>pi.compaction</code></td><td>上下文压缩</td></tr>
+          <tr><td><code>ramulus.agent.external-activation</code></td><td>启动或连接外部会话</td></tr>
+          <tr><td><code>ramulus.agent.external-configuration</code></td><td>修改外部会话配置</td></tr>
+          <tr><td><code>ramulus.agent.external-input</code></td><td>向外部会话投递输入</td></tr>
+          <tr><td><code>Delivery</code>（engine）</td><td>spawn、send 等 Agent 协作投递</td></tr>
+          <tr><td><code>ramulus.evolution.evaluate</code></td><td>方法候选试验</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Store -->
+<section class="dim" id="store">
+  <div class="dim-head">
+    <div class="eyebrow">7 · 数据</div>
+    <h2>持久化</h2>
+    <p>数据分散在多个 SQLite 文件里，每个文件都有明确的所有者。原生表只有少数几张，大量业务事实写成 Doc 和 Entry，靠 135 个类型标识区分。</p>
+  </div>
+  <div class="two">
+    <div class="figure scroll">
+      <h3 style="margin-bottom:6px">数据库文件</h3>
+      <table class="plain">
+        <thead><tr><th>文件</th><th>内容</th></tr></thead>
+        <tbody>
+          <tr><td><code>runtime.sqlite</code></td><td>每个 Workspace 一份：Conversation、Task、Submission、Entry、Document</td></tr>
+          <tr><td><code>registry.sqlite</code></td><td>Project、Workspace、成员、工作树、归属；Artifact 和 Companion 也在这个库</td></tr>
+          <tr><td><code>service-control.sqlite</code></td><td>服务生命周期、备份、运行时构建与限定</td></tr>
+          <tr><td><code>remote-devices.sqlite</code></td><td>设备授权、邀请、注册、密钥轮换</td></tr>
+          <tr><td><code>native-push.sqlite</code></td><td>推送注册、通知、派发回执</td></tr>
+          <tr><td><code>local-mcp-consent.sqlite</code></td><td>本地 MCP 同意记录</td></tr>
+          <tr><td><code>claims.sqlite</code></td><td>外部 Agent 写入者仲裁</td></tr>
+          <tr><td><code>attention-markers.sqlite</code></td><td>原生关注标记</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="figure scroll">
+      <h3 style="margin-bottom:6px">Doc / Entry 类型分布</h3>
+      <table class="plain">
+        <thead><tr><th>命名空间</th><th style="text-align:right">类型数</th></tr></thead>
+        <tbody>
+          <tr><td><code>ramulus.agent.*</code> 外部 Agent 意图、尝试、结果、绑定</td><td class="n">32</td></tr>
+          <tr><td><code>ramulus.companion.*</code></td><td class="n">12</td></tr>
+          <tr><td><code>ramulus.communication.*</code> 请求、问题、决定、投递</td><td class="n">9</td></tr>
+          <tr><td><code>ramulus.conversation-goal.*</code></td><td class="n">8</td></tr>
+          <tr><td>其他 <code>ramulus.*</code> 和 <code>pi.*</code></td><td class="n">74</td></tr>
+        </tbody>
+      </table>
+      <p class="note" style="margin-top:10px">外部 Agent 的副作用拆成 intent、attempt、result 这类记录，响应丢失后可以查询原记录，不用重发。</p>
+    </div>
+  </div>
+</section>
+
+<!-- 2. Dependency matrix -->
+<section class="dim" id="deps">
+  <div class="dim-head">
+    <div class="eyebrow">8 · 依赖</div>
+    <h2>包依赖矩阵</h2>
+    <p>行是导入方，列是被导入方，格子里的数是导入方有多少个非测试源文件引用了该包。行列都按层从上到下排序，所以所有格子都落在对角线右上方。这说明依赖只向内，包之间没有环。</p>
+  </div>
+  <div class="figure">
+    <div class="legend">
+      <span><i style="background:var(--c-client)"></i>客户端应用</span>
+      <span><i style="background:var(--c-ui)"></i>共享 UI / SDK</span>
+      <span><i style="background:var(--c-host)"></i>Host</span>
+      <span><i style="background:var(--c-exec)"></i>执行层</span>
+      <span><i style="background:var(--c-libs)"></i>领域契约与能力库</span>
+      <span style="color:var(--muted)">颜色越深，引用文件越多（对数刻度）</span>
+    </div>
+    <div class="scroll"><svg id="matrix" role="img" aria-label="包依赖矩阵"></svg></div>
+  </div>
+  <div class="findings">
+    <div class="finding"><span class="chip good">健康</span><h3>无反向依赖</h3><p>25 个有引用关系的包按层排序后，79 条边全部在上三角。<code>pnpm check:boundaries</code> 守住直接导入边界。</p></div>
+    <div class="finding"><span class="chip good">健康</span><h3>渲染层不碰 Host</h3><p>workbench-ui、Desktop 渲染进程和 Mobile 对 <code>@ramulus/host</code> 的引用都是 0。Desktop 的 39 个 src 引用都在渲染进程之外：main 31、browser 3、computer 3、pet 2。</p></div>
+    <div class="finding"><span class="chip warn">关注</span><h3>Host 扇出最大</h3><p>Host 依赖 18 个内部包，引用 core 799 次、pi-chord 305 次、pi-harness 255 次、pi-runtime 250 次。它同时是组合根和用例层。</p></div>
+  </div>
+</section>
+
+<!-- 3. Size -->
+<section class="dim" id="size">
+  <div class="dim-head">
+    <div class="eyebrow">9 · 规模</div>
+    <h2>代码规模与测试</h2>
+    <p>每个包的源码行与测试行（物理行，含空行和注释），按源码规模排序。比值列标黄的是测试少于源码一半的包。</p>
+  </div>
+  <div class="figure">
+    <div class="legend"><span><i style="background:var(--ink-2)"></i>源码行</span><span><i style="background:var(--accent)"></i>测试行</span><span style="color:var(--muted)">圆点颜色表示所属层</span></div>
+    <div class="bars" id="sizebars"></div>
+    <p class="note" style="margin-top:12px">i18n 的 19,110 行里有 18,749 行是生成的类型声明。pi-runtime 把 2,386 行的存储一致性测试套件放在 <code>src/testing</code>，被计为源码。</p>
+  </div>
+</section>
+
+<!-- 4. Host internals -->
+<section class="dim" id="hostsize">
+  <div class="dim-head">
+    <div class="eyebrow">9 · 规模 · Host</div>
+    <h2>Host 领域模块与热点文件</h2>
+    <p>Host 有 341,365 行源码，占全仓约 30%。左边是按领域目录统计的前 16 个模块，右边是全仓最大的手写源文件。</p>
+  </div>
+  <div class="two">
+    <div class="figure"><h3 style="margin-bottom:10px">apps/host/src 领域目录（行）</h3><div id="hostmods"></div></div>
+    <div class="figure scroll">
+      <h3 style="margin-bottom:6px">最大的手写源文件</h3>
+      <table class="plain">
+        <thead><tr><th>文件</th><th style="text-align:right">行</th></tr></thead>
+        <tbody>
+          <tr><td><code>apps/host/src/organization/workspace-runtime.ts</code></td><td class="n">4,329</td></tr>
+          <tr><td><code>apps/host/src/runtime/service/service-control-state.ts</code></td><td class="n">4,093</td></tr>
+          <tr><td><code>packages/external-agents/src/protocols/acp/session.ts</code></td><td class="n">3,587</td></tr>
+          <tr><td><code>apps/host/src/composition/service.ts</code></td><td class="n">3,162</td></tr>
+          <tr><td><code>packages/ramulus-pi-runtime/src/runtime/scheduler.ts</code></td><td class="n">2,928</td></tr>
+          <tr><td><code>apps/host/src/external-agents/connectors/external-codex-connector.ts</code></td><td class="n">2,908</td></tr>
+          <tr><td><code>apps/host/src/composition/durable-workspace.ts</code></td><td class="n">2,791</td></tr>
+          <tr><td><code>packages/external-agents/src/protocols/opencode/session.ts</code></td><td class="n">2,566</td></tr>
+          <tr><td><code>packages/external-agents/src/protocols/claude/client.ts</code></td><td class="n">2,540</td></tr>
+          <tr><td><code>apps/cli/src/command-catalog.ts</code></td><td class="n">2,340</td></tr>
+        </tbody>
+      </table>
+      <p class="note" style="margin-top:10px">4,397 个非测试源文件中，136 个超过 1,000 行，28 个超过 2,000 行。生成的 i18n 声明和 fixture 场景文件未列入上表。</p>
+    </div>
+  </div>
+</section>
+
+<!-- Risks -->
+<section class="dim" id="risks">
+  <div class="dim-head">
+    <div class="eyebrow">10 · 分析</div>
+    <h2>风险与建议</h2>
+    <p>包级依赖和平台边界最稳。压力主要在 Host 内部：目录之间没有层次，组合逻辑集中在少数大文件里。</p>
+  </div>
+  <div class="findings">
+    <div class="finding"><span class="chip risk">风险</span><h3>Host 内部缺少层次</h3><p>34 个目录互相可达，<code>check:boundaries</code> 管不到这里。建议先加目录级依赖检查，再从 models ↔ external-agents（27 / 25）和 conversations ↔ external-agents（15 / 19）拆起。</p></div>
+    <div class="finding"><span class="chip warn">关注</span><h3>组合文件过大</h3><p>workspace-runtime.ts 4,329 行，service-control-state.ts 4,093 行，service.ts 3,162 行，durable-workspace.ts 2,791 行。可以沿现有领域目录下放，不新增转发层。</p></div>
+    <div class="finding"><span class="chip warn">关注</span><h3>外部 Agent 约 10 万行</h3><p>external-agents 包 5.3 万行，Host 同名目录 4.9 万行，加起来接近全部源码的 9%。6 个文件超过 2,000 行，<code>ramulus.agent.*</code> 有 32 种记录类型。</p></div>
+    <div class="finding"><span class="chip warn">关注</span><h3>Companion 的归属偏向 Host</h3><p>Companion 依赖 conversations 65 处、storage 47 处、organization 44 处。可以把规则继续收进 <code>packages/companion</code>，并通过窄端口访问 Host。</p></div>
+    <div class="finding"><span class="chip warn">关注</span><h3>测试分布不均</h3><p>整体 1.26，Host 1.64，Desktop 1.81。workbench-ui 0.62、pi-runtime 0.55、wiki 0.33、web-access 0.19。调度器和共享 UI 值得先补。</p></div>
+    <div class="finding"><span class="chip warn">关注</span><h3>部分包仍是平铺结构</h3><p>Core 约 3.3 万行、Client 约 4.1 万行直接放在 <code>src/</code> 根目录，<code>renderer/shared</code> 有 5.7 万行。文件数继续增长后会更难定位。</p></div>
+    <div class="finding"><span class="chip info">清理</span><h3>残留目录</h3><p><code>packages/ramulus-pi-durable</code> 没有 package.json，只剩 <code>dist</code> 和 <code>node_modules</code>，可以确认后删除。</p></div>
+    <div class="finding"><span class="chip info">信息</span><h3>变更速度很快</h3><p>11 月前 7 天有 439 次提交，比 10 月全月多 84%。大文件和目录环在这个速度下更容易产生冲突。</p></div>
+    <div class="finding"><span class="chip good">良好</span><h3>包依赖无环</h3><p>79 条包依赖全部指向内层，渲染层对 Host 的引用为 0，平台能力各归一层。</p></div>
+  </div>
+</section>
+
+<footer>
+  <div><b>数据来源与口径</b></div>
+  <div>源码快照：<code>main</code> @ 8b7601ff7（2026-11-07 01:13），含工作树中 113 个未提交修改。实体来自 <code>CREATE TABLE</code> 和 zod/TypeScript 类型；领域耦合来自 <code>apps/host/src</code> 的相对导入，按文件计数；路由是 <code>app.get/post/...</code> 的调用点，循环注册只算一次，所以是下限；能力矩阵按导入语句匹配，不含测试、fixture 和脚本。行数是 Git 跟踪或未忽略文件的物理行。</div>
+  <div>分层图的命名参考了 <code>ARCHITECTURE.md</code>，其余结论都来自代码。本页是静态统计，没有运行构建、测试或产品验收，代码存在不代表功能已通过真实环境验证。</div>
+</footer>
+</div>
+<div id="tip" hidden></div>
+
+<script>
+(function () {
+  var G = { client: 'g-client', ui: 'g-ui', host: 'g-host', exec: 'g-exec', libs: 'g-libs' };
+  // name, group, src lines, test lines
+  var PK = [
+    ['host','host',341365,560768],['workbench-ui','ui',309619,193085],['desktop','client',89894,163042],
+    ['client','ui',60122,96218],['external-agents','exec',53252,68555],['mobile','client',50138,35815],
+    ['core','libs',47390,32781],['spec','libs',38692,72156],['pi-ai','exec',32385,49577],
+    ['cli','client',20476,53796],['i18n','libs',19110,181],['pi-runtime','exec',17847,9782],
+    ['pi-harness','exec',16490,47491],['pi-chord','exec',14654,17467],['engine','exec',9052,24148],
+    ['pi-env','exec',8003,2049],['web-access','libs',3912,732],['relay-transport','libs',2176,1204],
+    ['documents','libs',1976,805],['pi-telemetry','exec',1572,999],['extensions','libs',982,591],
+    ['profile','libs',892,1141],['mcp-client','libs',804,839],['wiki','libs',771,251],
+    ['companion','exec',747,639],['relay','client',573,335]
+  ];
+  var grp = {}; PK.forEach(function (p) { grp[p[0]] = p[1]; });
+  var fmt = function (n) { return n.toLocaleString('en-US'); };
+
+  // ---- size bars
+  var max = 560768, sb = document.getElementById('sizebars');
+  var html = '<div class="bar-row head"><span>包</span><span></span><span class="num">源码</span><span class="num">测试</span><span class="num">比值</span></div>';
+  PK.forEach(function (p) {
+    var r = p[3] / p[2];
+    html += '<div class="bar-row ' + G[p[1]] + '"><span class="name"><span class="dot"></span>' + p[0] + '</span>' +
+      '<span class="track"><i class="src" style="width:' + (p[2] / max * 100).toFixed(2) + '%"></i><i class="test" style="width:' + (p[3] / max * 100).toFixed(2) + '%"></i></span>' +
+      '<span class="num">' + fmt(p[2]) + '</span><span class="num">' + fmt(p[3]) + '</span>' +
+      '<span class="num ratio' + (r < 0.5 ? ' low' : '') + '">' + r.toFixed(2) + '</span></div>';
+  });
+  sb.innerHTML = html;
+
+  // ---- host modules
+  var HM = [['external-agents',48985],['conversations',31607],['models',30551],['companion',26821],['library',23192],['runtime',18869],['organization',16162],['composition',15650],['methods',14296],['workspace-git',12633],['workspace-files',11168],['spec',10198],['computer',8249],['client-state',6882],['browser',6572],['github',5709]];
+  document.getElementById('hostmods').innerHTML = HM.map(function (m) {
+    return '<div class="hbar"><span class="name">' + m[0] + '</span><span><i class="fill" style="display:block;width:' + (m[1] / 48985 * 100).toFixed(1) + '%"></i></span><span class="num">' + fmt(m[1]) + '</span></div>';
+  }).join('');
+
+  // ---- capability matrix (package x effect)
+  var CAPS = ['SQLite','Hono 路由','子进程','文件系统','fetch','Electron','Capacitor','React','zod','模型 SDK'];
+  var CG = [
+    ['客户端应用','client',[['desktop',350,[0,0,13,61,4,84,0,9,45,0]],['mobile',114,[3,0,0,0,0,0,9,1,0,0]],['cli',78,[0,0,2,12,0,0,0,0,25,0]],['relay',3,[0,0,0,1,0,0,0,0,0,0]]]],
+    ['共享 UI / SDK','ui',[['workbench-ui',1150,[0,0,0,1,2,0,0,643,28,0]],['client',267,[0,0,2,8,5,0,0,0,20,0]]]],
+    ['Host','host',[['host',1080,[55,93,37,259,11,0,0,0,253,0]]]],
+    ['执行层','exec',[['engine',28,[0,0,0,1,1,0,0,0,7,0]],['external-agents',151,[0,0,15,29,0,0,0,0,29,13]],['companion',9,[0,0,0,0,0,0,0,0,0,0]],['pi-harness',66,[0,0,2,4,0,0,0,0,0,0]],['pi-runtime',46,[1,0,0,0,0,0,0,0,0,0]],['pi-chord',39,[3,0,1,2,0,0,0,0,0,0]],['pi-ai',202,[0,0,0,1,12,0,0,0,0,11]],['pi-env',10,[0,0,2,1,0,0,0,0,0,0]]]],
+    ['契约与能力库','libs',[['core',224,[0,0,2,3,0,0,0,0,191,0]],['spec',221,[0,0,8,59,0,0,0,0,15,0]],['profile',11,[0,0,0,3,0,0,0,0,3,0]],['web-access',20,[0,0,0,1,5,0,0,0,0,0]]]]
+  ];
+  var ch = '<thead><tr><th>包（源文件数）</th>' + CAPS.map(function (c) { return '<th>' + c + '</th>'; }).join('') + '</tr></thead><tbody>';
+  CG.forEach(function (g) {
+    ch += '<tr class="grp"><td colspan="11">' + g[0] + '</td></tr>';
+    g[2].forEach(function (r) {
+      ch += '<tr class="' + G[g[1]] + '"><td class="pk"><span><i class="dot"></i>' + r[0] + ' <span class="dash">' + r[1] + '</span></span></td>';
+      r[2].forEach(function (v) {
+        if (!v) { ch += '<td class="z">·</td>'; return; }
+        var pct = Math.round(12 + 70 * Math.log(v + 1) / Math.log(650));
+        ch += '<td style="background:color-mix(in oklab, var(--g) ' + pct + '%, var(--surface));color:' + (pct >= 62 ? 'var(--surface)' : 'var(--ink)') + '">' + v + '</td>';
+      });
+      ch += '</tr>';
+    });
+  });
+  document.getElementById('capmatrix').innerHTML = ch + '</tbody>';
+
+  // ---- entity diagram
+  var E2 = [
+    ['Member','libs',40,64,200,['member_id','kind human | agent','name'],1],
+    ['Project','libs',300,64,190,['project_id','name','source_id（Registry）'],1],
+    ['Workspace','host',570,64,220,['id','mode personal | in-repo','root · root_identity','definition','binding_revision'],1],
+    ['ManagedWorktree','host',860,64,220,['path','workspace_id','branch · baseline','human_protected'],1],
+    ['DefinitionCopy','libs',40,214,200,['project·task·workspace','source_path','observed_digest'],1],
+    ['ProjectTask','libs',300,214,190,['project_id · task_id','owner_workspace_id','owner_kind conv | task','owner_id'],1],
+    ['WorkspaceOwner','host',570,214,220,['workspace_id','source_id · project_id','revision'],1],
+    ['Goal / GoalVersion','ui',30,412,220,['goal_id · revision','text_revision','status 4 种','responsible_agent'],1],
+    ['Conversation = Agent','exec',300,412,240,['id','parent {conversationId, at}','owner {conversationId, taskId}','Agent 引用含 scope + 此 id'],1],
+    ['Task','exec',600,412,220,['id · conversation_id','kind · status','owner conversation | task','background · waits'],1],
+    ['ExternalBinding','client',870,412,220,['binding_id','protocol · capabilities','configuration {cwd, model}','binding Entry + 当前 Doc'],1],
+    ['Submission','exec',30,620,220,['id · conversation_id','request_id','status 5 种','entry · answer · result'],1],
+    ['Entry','exec',300,620,240,['id · conversation_id','kind','model[] · data','byTaskId','head · edits[]'],1],
+    ['Document / Revision','exec',600,620,220,['id · kind · key_value','scope_kind 3 种','owner_id','revisions base | delta'],1],
+    ['NativeAgentSession','client',870,620,220,['executor（11 种）','backend · session_id','storage_scope','account_scope · session_file'],1]
+  ];
+  var er = '<defs><marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0,0 L10,5 L0,10 z"/></marker></defs>';
+  er += '<rect class="band" x="16" y="20" width="1088" height="312" rx="10"/><text class="band-label" x="30" y="42">registry.sqlite · 每个 Host 一份 · 组织与归属</text>';
+  er += '<rect class="band" x="16" y="356" width="1088" height="404" rx="10"/><text class="band-label" x="30" y="378">runtime.sqlite · 每个 Workspace 一份</text>';
+  var ed = function (d, cls) { return '<path class="edge' + (cls ? ' ' + cls : '') + '" d="' + d + '" marker-end="url(#ah3)"/>'; };
+  var lb = function (x, y, t, w) { return '<rect class="plate" x="' + (x - 3) + '" y="' + (y - 11) + '" width="' + (w || t.length * 7 + 6) + '" height="15" rx="3"/><text class="card-label" x="' + x + '" y="' + y + '">' + t + '</text>'; };
+  // registry edges
+  er += ed('M240 108 H298') + lb(252, 101, 'N : M');
+  er += ed('M490 108 H568') + lb(512, 101, '1 : N');
+  er += ed('M790 108 H858') + lb(806, 101, '1 : N');
+  er += ed('M680 185 V212') + lb(690, 203, '1 : 1');
+  er += ed('M395 151 V212') + lb(405, 186, '1 : N');
+  er += ed('M300 258 H242') + lb(251, 251, '1 : N');
+  er += ed('M570 258 H530 V134 H492') + lb(500, 200, '唯一所有者', 76);
+  // cross-store
+  er += ed('M790 164 H825 V354', 'dash') + lb(834, 300, '1 : 1 一个 Storage', 124);
+  er += ed('M460 318 V410', 'dash') + lb(470, 346, '映射到 Conversation 或 Task', 176);
+  // runtime edges
+  er += ed('M250 464 H298') + lb(257, 457, 'N : 1');
+  er += ed('M540 440 H598') + lb(553, 433, '1 : N');
+  er += ed('M600 492 H542') + lb(547, 510, '子 Agent', 58);
+  er += ed('M360 516 V618') + lb(370, 572, '1 : N');
+  er += ed('M300 500 H275 V652 H252') + lb(279, 582, '1:N', 26);
+  er += ed('M250 696 H298') + lb(255, 689, '引用', 34);
+  er += ed('M640 516 V572 H490 V618') + lb(516, 566, 'byTaskId', 62);
+  er += ed('M740 516 V618') + lb(750, 572, '作用域');
+  er += ed('M510 412 V394 H980 V410') + lb(690, 398, '0..1 当前绑定', 92);
+  er += ed('M980 516 V618') + lb(990, 572, '1 : 1');
+  er += ed('M325 412 C325 388 378 388 378 410') + lb(334, 396, 'fork', 32);
+  E2.forEach(function (e) {
+    var h = 30 + 17 * e[5].length + 6, x = e[2], y = e[3], w = e[4];
+    er += '<g class="' + G[e[1]] + '"><rect class="ent-box" x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="6"/>';
+    er += '<path class="ent-head" d="M' + (x + 1) + ' ' + (y + 26) + ' V' + (y + 6) + ' Q' + (x + 1) + ' ' + (y + 1) + ' ' + (x + 6) + ' ' + (y + 1) + ' H' + (x + w - 6) + ' Q' + (x + w - 1) + ' ' + (y + 1) + ' ' + (x + w - 1) + ' ' + (y + 6) + ' V' + (y + 26) + ' Z"/>';
+    er += '<text class="ent-title" x="' + (x + 10) + '" y="' + (y + 18) + '">' + e[0] + '</text>';
+    e[5].forEach(function (f, i) { er += '<text class="ent-field' + (i === 0 ? ' key' : '') + '" x="' + (x + 10) + '" y="' + (y + 43 + i * 17) + '">' + f + '</text>'; });
+    er += '</g>';
+  });
+  document.getElementById('erd').innerHTML = er;
+
+  // ---- domain group matrix
+  var GK = ['组织','会话执行','Agent 与模型','能力','工作材料','运行环境','自动化','连接与服务','组合根'];
+  var GM = [[0,14,11,11,34,9,9,35,4],[23,0,39,26,24,10,10,30,18],[17,40,0,2,9,8,0,45,0],[21,38,1,0,10,0,0,24,4],[12,5,1,1,0,1,0,22,1],[10,13,1,3,14,0,0,18,2],[45,71,6,12,12,0,0,71,14],[16,16,4,9,10,3,7,0,6],[25,37,26,40,32,24,11,38,0]];
+  var c2 = 44, L2 = 104, T2 = 92, n2 = 9, gs = '';
+  GK.forEach(function (k, i) {
+    gs += '<text x="' + (L2 - 10) + '" y="' + (T2 + i * c2 + c2 / 2 + 4) + '" text-anchor="end" style="font-size:12px">' + k + '</text>';
+    gs += '<text transform="translate(' + (L2 + i * c2 + c2 / 2 + 4) + ',' + (T2 - 8) + ') rotate(-55)" style="font-size:12px">' + k + '</text>';
+  });
+  GM.forEach(function (row, r) {
+    row.forEach(function (v, c) {
+      var x = L2 + c * c2 + 1, y = T2 + r * c2 + 1;
+      if (r === c) { gs += '<rect x="' + x + '" y="' + y + '" width="' + (c2 - 2) + '" height="' + (c2 - 2) + '" rx="4" style="fill:var(--line)"/>'; return; }
+      if (!v) { gs += '<rect x="' + x + '" y="' + y + '" width="' + (c2 - 2) + '" height="' + (c2 - 2) + '" rx="4" style="fill:var(--bg)"/>'; return; }
+      var pct = Math.round(10 + 80 * Math.log(v + 1) / Math.log(72));
+      gs += '<rect class="cell" x="' + x + '" y="' + y + '" width="' + (c2 - 2) + '" height="' + (c2 - 2) + '" rx="4" data-t="' + GK[r] + ' → ' + GK[c] + '：' + v + ' 处文件级导入" style="fill:color-mix(in oklab, var(--c-host) ' + pct + '%, var(--surface))"/>';
+      gs += '<text x="' + (x + c2 / 2 - 1) + '" y="' + (y + c2 / 2 + 3) + '" text-anchor="middle" style="pointer-events:none;font:500 12px var(--font-mono);fill:' + (pct >= 66 ? 'var(--surface)' : 'var(--ink)') + '">' + v + '</text>';
+    });
+  });
+  var gm = document.getElementById('gmatrix');
+  gm.setAttribute('viewBox', '0 0 ' + (L2 + n2 * c2 + 8) + ' ' + (T2 + n2 * c2 + 8));
+  gm.style.width = '100%'; gm.style.maxWidth = (L2 + n2 * c2 + 8) + 'px'; gm.style.minWidth = '420px';
+  gm.innerHTML = gs;
+
+  var HOT = [['companion → conversations',65],['companion → storage',47],['companion → organization',44],['models → external-agents',27],['external-agents → models',25],['composition → organization',25],['organization → storage',23],['organization → workspace-files',21],['external-agents → conversations',19],['spec → workspace-files',18]];
+  document.getElementById('hotedges').innerHTML = HOT.map(function (m) {
+    return '<div class="hbar" style="grid-template-columns:minmax(0,210px) minmax(0,1fr) 34px"><span class="name">' + m[0] + '</span><span><i class="fill" style="display:block;width:' + (m[1] / 65 * 100).toFixed(1) + '%"></i></span><span class="num">' + m[1] + '</span></div>';
+  }).join('');
+
+  // ---- feature table
+  var FT = [["会话与消息", "创建、输入、配置、压缩、上下文修订、Fork、暂停、中止、排队输入", 22, 31607, 43, 15123, "conversation", "有"], ["历史导入", "跨执行器会话导入、移交、缓存", 2, 3865, 0, 10371, "", "有"], ["Goal", "设置、暂停、恢复、修改、清除、完成证据", 3, 3189, 1, 2200, "goal", ""], ["Agent 协作", "spawn、fork、send、inspect、ask、reply", 4, 5678, 5, 0, "agent", ""], ["外部 Agent", "11 种执行器的激活、配置、输入、问答、子 Agent、Fork", 18, 48985, 12, 12980, "external-provider", ""], ["模型与账户", "连接、账户、登录、目录发现、配额、偏好、路由", 15, 30551, 41, 22892, "model", "有"], ["Project / Workspace", "注册、归属转移、成员、改绑、工作树、归档", 8, 16162, 50, 26443, "workspace", "有"], ["文件", "读写、修订校验、捕获、媒体", 5, 11168, 2, 4081, "", "有"], ["Git / GitHub", "检出、提交、评审、工作树、GitHub 集成", 16, 18342, 2, 0, "checkout", "有"], ["Spec", "文档、校验、工作流", 9, 10198, 3, 10078, "spec", "有"], ["Wiki", "Book、页面、资料检索", 1, 1045, 1, 3181, "wiki", ""], ["Library", "Instructions、Agent files、MCP、Skills、Hooks、Profiles、Suites 投射", 3, 23192, 0, 11653, "library", ""], ["方法包 / Evolution", "预览、安装、更新、回滚、导出、模板、候选试验", 5, 17902, 28, 0, "package", "有"], ["Companion", "人格、配置、提醒、主动联系、规则、Peer、预算", 17, 26820, 26, 13387, "", "有"], ["MCP", "stdio 连接、发现、本地同意", 2, 3832, 2, 0, "mcp", "有"], ["扩展 / 插件", "目录、策略、安装", 3, 3427, 4, 3681, "plugin", ""], ["浏览器", "页面自动化、捕获、预览", 8, 6572, 4, 4197, "browser", "有"], ["Computer 控制", "控制权、视图、输入回执", 3, 8249, 1, 2924, "", "有"], ["终端 / 脚本", "终端会话、Workspace 脚本", 2, 2781, 12, 2824, "script", "有"], ["Artifact", "版本、渲染、投递、反馈", 3, 3267, 3, 3692, "", "有"], ["定时任务", "cron、周期、调用记录", 1, 2986, 0, 0, "schedule", "有"], ["远程设备 / 通知", "邀请、配对、密钥轮换、授权、Relay、推送", 2, 7403, 23, 0, "connection", "有"], ["语音听写", "Apple 听写", 1, 1145, 1, 0, "", "有"], ["诊断 / 帮助", "运行诊断、对比、产品帮助", 3, 5857, 3, 0, "diagnostics", ""], ["服务生命周期", "启动、备份、恢复、运行时构建", 1, 17916, 0, 560, "host", "有"]];
+  var dash = '<span class="dash">—</span>';
+  document.getElementById('feattable').innerHTML = FT.map(function (r) {
+    return '<tr><td>' + r[0] + '</td><td class="cap-text">' + r[1] + '</td><td class="n">' + r[2] + '</td><td class="n">' + fmt(r[3]) + '</td><td class="n">' + (r[4] || dash) + '</td><td class="n">' + (r[5] ? fmt(r[5]) : dash) + '</td><td class="tag">' + (r[6] || dash) + '</td><td>' + (r[7] || dash) + '</td></tr>';
+  }).join('');
+
+  // ---- dependency matrix
+  var ORDER = ['desktop','mobile','cli','workbench-ui','client','host','engine','companion','external-agents','pi-env','pi-harness','core','pi-runtime','pi-ai','pi-chord','profile','spec','mcp-client','web-access','wiki','documents','relay-transport','extensions','i18n','pi-telemetry'];
+  var E = [['cli','core',57],['cli','client',43],['cli','i18n',7],['cli','relay-transport',3],['cli','profile',1],['cli','spec',1],
+    ['client','core',232],['client','relay-transport',4],['client','i18n',2],['client','extensions',1],['client','wiki',1],
+    ['companion','core',5],['companion','pi-harness',1],['companion','pi-chord',1],['companion','pi-runtime',1],
+    ['core','profile',8],['core','extensions',5],['core','i18n',3],['core','spec',3],
+    ['desktop','core',173],['desktop','client',151],['desktop','workbench-ui',141],['desktop','host',47],['desktop','i18n',6],['desktop','documents',6],['desktop','pi-ai',3],['desktop','relay-transport',2],['desktop','extensions',2],
+    ['engine','pi-harness',19],['engine','core',17],['engine','pi-runtime',17],['engine','pi-chord',11],['engine','external-agents',4],['engine','pi-ai',3],
+    ['external-agents','core',105],['external-agents','pi-runtime',15],['external-agents','pi-chord',15],['external-agents','pi-ai',1],
+    ['host','core',799],['host','pi-chord',305],['host','pi-harness',255],['host','pi-runtime',250],['host','external-agents',124],['host','engine',106],['host','pi-ai',58],['host','profile',33],['host','companion',21],['host','extensions',18],['host','spec',10],['host','web-access',5],['host','mcp-client',5],['host','pi-env',4],['host','relay-transport',4],['host','wiki',3],['host','documents',1],['host','pi-telemetry',1],
+    ['mobile','client',87],['mobile','core',74],['mobile','workbench-ui',53],['mobile','i18n',3],['mobile','documents',1],['mobile','relay-transport',1],
+    ['profile','extensions',1],['pi-ai','pi-telemetry',2],['pi-chord','pi-telemetry',3],['pi-env','pi-harness',5],['pi-env','pi-chord',4],
+    ['pi-harness','pi-chord',38],['pi-harness','pi-runtime',30],['pi-harness','pi-ai',27],['pi-harness','pi-telemetry',3],
+    ['pi-runtime','pi-chord',27],['pi-runtime','pi-telemetry',6],
+    ['workbench-ui','core',720],['workbench-ui','client',586],['workbench-ui','documents',28],['workbench-ui','i18n',9],['workbench-ui','extensions',3],['workbench-ui','wiki',1]];
+  var cs = 26, L = 128, T = 120, n = ORDER.length, W = L + n * cs + 8, H = T + n * cs + 8;
+  var idx = {}; ORDER.forEach(function (k, i) { idx[k] = i; });
+  var lmax = Math.log(800);
+  var s = '';
+  // diagonal guide
+  for (var i = 0; i < n; i++) {
+    s += '<rect x="' + (L + i * cs + 1) + '" y="' + (T + i * cs + 1) + '" width="' + (cs - 2) + '" height="' + (cs - 2) + '" rx="3" style="fill:var(--line)"/>';
+  }
+  // grid lines
+  for (var j = 0; j <= n; j++) {
+    s += '<line x1="' + L + '" x2="' + (L + n * cs) + '" y1="' + (T + j * cs) + '" y2="' + (T + j * cs) + '" style="stroke:var(--line);stroke-width:0.6"/>';
+    s += '<line y1="' + T + '" y2="' + (T + n * cs) + '" x1="' + (L + j * cs) + '" x2="' + (L + j * cs) + '" style="stroke:var(--line);stroke-width:0.6"/>';
+  }
+  // labels
+  ORDER.forEach(function (k, i) {
+    var c = 'var(--c-' + grp[k] + ')';
+    s += '<circle cx="' + (L - 10) + '" cy="' + (T + i * cs + cs / 2) + '" r="4" style="fill:' + c + '"/>';
+    s += '<text class="mono" x="' + (L - 20) + '" y="' + (T + i * cs + cs / 2 + 4) + '" text-anchor="end">' + k + '</text>';
+    var x = L + i * cs + cs / 2;
+    s += '<circle cx="' + x + '" cy="' + (T - 10) + '" r="4" style="fill:' + c + '"/>';
+    s += '<text class="mono" transform="translate(' + (x + 4) + ',' + (T - 20) + ') rotate(-90)">' + k + '</text>';
+  });
+  // cells
+  E.forEach(function (e) {
+    var r = idx[e[0]], c = idx[e[1]];
+    var pct = Math.round(14 + 86 * Math.log(e[2] + 1) / lmax);
+    var x = L + c * cs + 1, y = T + r * cs + 1;
+    s += '<rect class="cell" x="' + x + '" y="' + y + '" width="' + (cs - 2) + '" height="' + (cs - 2) + '" rx="3" data-t="' + e[0] + ' → ' + e[1] + '：' + e[2] + ' 个源文件引用" style="fill:color-mix(in oklab, var(--accent) ' + pct + '%, var(--surface))"/>';
+    s += '<text x="' + (x + (cs - 2) / 2) + '" y="' + (y + cs / 2 + 2.5) + '" text-anchor="middle" style="pointer-events:none;font:500 ' + (e[2] >= 100 ? 8.5 : 9.5) + 'px var(--font-mono);fill:' + (pct >= 58 ? 'var(--on-accent)' : 'var(--ink)') + '">' + e[2] + '</text>';
+  });
+  s += '<text class="sub" x="' + (L + n * cs - 4) + '" y="' + (T + n * cs - 8) + '" text-anchor="end">对角线以下为空：没有向上的依赖</text>';
+  var m = document.getElementById('matrix');
+  m.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  m.setAttribute('width', W); m.setAttribute('height', H);
+  m.style.minWidth = W + 'px';
+  m.innerHTML = s;
+
+  var tip = document.getElementById('tip');
+  [m, document.getElementById('gmatrix')].forEach(function (m) { m.addEventListener('mousemove', function (ev) {
+    var t = ev.target.getAttribute && ev.target.getAttribute('data-t');
+    if (!t) { tip.hidden = true; return; }
+    tip.textContent = t; tip.hidden = false;
+    var x = Math.min(ev.clientX + 14, window.innerWidth - tip.offsetWidth - 8);
+    tip.style.left = x + 'px'; tip.style.top = (ev.clientY + 14) + 'px';
+  });
+  m.addEventListener('mouseleave', function () { tip.hidden = true; }); });
+})();
+</script>
+</body>
+</html>
